@@ -1,5 +1,5 @@
 export enum TodoFilter {
-  All = 'All',
-  Active = 'Active',
-  Completed = 'Completed',
+  all = 'all',
+  active = 'active',
+  completed = 'completed',
 }

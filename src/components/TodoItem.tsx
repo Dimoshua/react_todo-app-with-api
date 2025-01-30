@@ -1,117 +1,142 @@
-/* eslint-disable jsx-a11y/label-has-associated-control */
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Todo } from '../types/Todo';
 import cn from 'classnames';
 
-type Props = {
+type TodoItemProps = {
   todo: Todo;
-  isLoading?: boolean;
-  isDeleting?: boolean;
-  onDelete?: (id: number) => Promise<boolean>;
-  onToggleOneCompleted?: (todo: Todo) => void;
-  onRenameTodo?: (todo: Todo, title: string) => Promise<boolean>;
+  deleteTodo: (todoId: number) => void;
+  tempoTodo: Todo | null;
+  isLoading: boolean;
+  updateTodo: (updatedTodo: Todo) => Promise<void>;
+  toggleLoader: boolean;
+  isEditing: boolean;
+  setIsEditingTodoId: (todoId: number | null) => void;
 };
-
-export const TodoItem: React.FC<Props> = ({
+export const TodoItem: React.FC<TodoItemProps> = ({
   todo,
+  deleteTodo,
+  tempoTodo,
   isLoading,
-  isDeleting,
-  onDelete,
-  onToggleOneCompleted,
-  onRenameTodo,
+  updateTodo,
+  toggleLoader,
+  isEditing,
+  setIsEditingTodoId,
 }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState(todo.title);
+  const [localTodoLoader, setLocalTodoLoader] = useState(false);
+  const [editedTitle, setEditedTitle] = useState(todo.title);
 
-  const handleEditClick = () => {
-    setIsEditing(true);
+  const handleCheckedTodo = async () => {
+    try {
+      setLocalTodoLoader(true);
+
+      const updatedTodo = { ...todo, completed: !todo.completed };
+
+      await updateTodo(updatedTodo);
+    } finally {
+      setLocalTodoLoader(false);
+    }
   };
 
   const handleSave = async () => {
-    const trimmedTitle = editTitle.trim();
+    const trimmetTitle = editedTitle.trim();
 
-    if (trimmedTitle === todo.title) {
-      return setIsEditing(false);
+    if (!trimmetTitle) {
+      deleteTodo(todo.id);
+
+      return;
     }
 
-    const success = await (trimmedTitle
-      ? onRenameTodo?.(todo, trimmedTitle)
-      : onDelete?.(todo.id));
+    if (trimmetTitle !== todo.title) {
+      try {
+        setLocalTodoLoader(true);
+        const updatedTodo = { ...todo, title: trimmetTitle };
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-    success && setIsEditing(false);
+        await updateTodo(updatedTodo);
+
+        setIsEditingTodoId(null);
+      } catch (error) {
+        setLocalTodoLoader(false);
+        throw error;
+      } finally {
+        setLocalTodoLoader(false);
+      }
+    }
+
+    setIsEditingTodoId(null);
   };
 
-  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setEditTitle(e.target.value);
+  const handleCancel = () => {
+    setEditedTitle(todo.title);
+    setIsEditingTodoId(null);
   };
 
-  const handleEditKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      e.preventDefault();
       handleSave();
     } else if (e.key === 'Escape') {
-      setIsEditing(false);
-      setEditTitle(todo.title);
+      handleCancel();
     }
-  };
-
-  const handleEditBlur = () => {
-    handleSave();
   };
 
   return (
     <div
-      key={todo.id}
       data-cy="Todo"
-      className={cn('todo', { completed: todo.completed })}
+      className={cn('todo', {
+        completed: todo.completed,
+      })}
+      key={todo.id}
     >
       <label className="todo__status-label">
+        {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
         <input
           data-cy="TodoStatus"
           type="checkbox"
           className="todo__status"
           checked={todo.completed}
-          onChange={() => onToggleOneCompleted && onToggleOneCompleted(todo)}
+          onClick={handleCheckedTodo}
         />
       </label>
-
       {isEditing ? (
         <input
           data-cy="TodoTitleField"
           type="text"
           className="todo__title-field"
           placeholder="Empty todo will be deleted"
-          value={editTitle}
-          onChange={handleEditChange}
-          onKeyDown={handleEditKeyDown}
-          onBlur={handleEditBlur}
+          value={editedTitle}
+          onChange={e => setEditedTitle(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={handleSave}
           autoFocus
         />
       ) : (
-        <>
-          <span
-            data-cy="TodoTitle"
-            className="todo__title"
-            onDoubleClick={handleEditClick}
-          >
-            {todo.title}
-          </span>
-          <button
-            type="button"
-            className="todo__remove"
-            data-cy="TodoDelete"
-            onClick={() => onDelete && onDelete(todo.id)}
-          >
-            ×
-          </button>
-        </>
+        <span
+          data-cy="TodoTitle"
+          className="todo__title"
+          onDoubleClick={() => setIsEditingTodoId(todo.id)}
+        >
+          {todo.title}
+        </span>
+      )}
+
+      {!isEditing && (
+        <button
+          type="button"
+          className="todo__remove"
+          data-cy="TodoDelete"
+          onClick={() => deleteTodo(todo.id)}
+        >
+          ×
+        </button>
       )}
 
       <div
         data-cy="TodoLoader"
         className={cn('modal overlay', {
-          'is-active': isLoading || isDeleting,
+          'is-active':
+            (tempoTodo && !todo.id) ||
+            isLoading ||
+            (toggleLoader && !todo.completed) ||
+            localTodoLoader,
         })}
       >
         <div className="modal-background has-background-white-ter" />
